@@ -4,7 +4,9 @@ import Text.Printf
 import Debug.Trace
 import System.Exit
 import Control.Monad.State
+
 shuffle :: [a] -> StdGen -> (StdGen, [a])
+-- shuffle a deck
 shuffle list generator' = 
     let len=length list in 
     case len of 
@@ -12,10 +14,10 @@ shuffle list generator' =
         1 -> (generator', list)
         _ ->
             let old_initial=head list in 
-            let (num, newgen') = uniformR (0 :: Int, (len - 1)) generator' in 
-            
-            let (newgen,residue ) = shuffle (tail list) newgen' in 
-            if num==0 then (newgen, old_initial:residue)
+            let (num, newgen') = uniformR (0 :: Int, (len - 1)) generator' in -- Get a random index 
+            let (newgen,residue ) = shuffle (tail list) newgen' in -- Shuffle the rest of the deck recursively 
+            -- Slot the initial in that random index
+            if num==0 then (newgen, old_initial:residue) 
             else let (before, after') = splitAt (num-1) residue in
             let new_initial=head after' in
             let after = tail after' in
@@ -53,7 +55,6 @@ data GameResult = GameOver (Result, Int, IO ()) | GameNotOver
 type GameStateState = State GameState GameResult
 game :: GameStateState
 fight :: GameStateState
-gamerec ::  GameStateState
 initialize_game_state :: StdGen -> GameState 
 print_battlers :: [Card] -> [Card] -> GameStateState
 
@@ -83,7 +84,13 @@ showsuit s = case s of
     Hearts -> '♥'
     Red -> 'R'
     Black -> 'B'
+    
 unshuffled_deck = 
+    -- do on a list runs a foreach loop every line so here I am abusing it
+    -- this is similar to 
+    -- foreach (simple_suit in allSimpleSuits):
+    --  foreach (simple_rank in allSimpleRanks):
+    --    list.append(Card(simplesuit, simplerank))
     (do 
     simple_suit <- allSimpleSuits
     simple_rank <- allSimpleRanks
@@ -93,7 +100,7 @@ unshuffled_deck =
     joker_suit <- [Red , Black]
     return (Card Joker joker_suit))
 
-
+-- This is the code needed for a single fight of 2 cards, this is run recursively until a victor is decided or until the cards run out. 
 fight = do
     game_state <- get
     let (p1d,p1ds,newgen') = if ((length $ player1_deck game_state)==0)
@@ -190,8 +197,8 @@ fight = do
                         in war (iom game_state) (tail p1d) (tail p2d) p1b p2b 
     
 
-    
-gamerec = 
+--
+game = 
     do
         game_state <- get
         if move_count game_state >= 50000 then
@@ -210,8 +217,7 @@ gamerec =
                     return $ GameOver (Player2_Win,move_count game_state,iom')
                 else undefined 
     
-game = 
-    gamerec 
+
 initialize_game_state generator' = 
     let deck_size = length unshuffled_deck in
     let (newgen,deck) = shuffle unshuffled_deck generator' in
