@@ -90,6 +90,7 @@ check_battle_winner  p1b p2b p1d p2d p1ds p2ds newgen = do
 
 -- Increments move counter
 increment_move = do
+    game_state <- get 
     put GameState {
         player1_deck = player1_deck game_state,
         player2_deck = player2_deck game_state,
