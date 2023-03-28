@@ -57,7 +57,49 @@ game :: GameStateState
 fight :: GameStateState
 initialize_game_state :: StdGen -> GameState 
 print_battlers :: [Card] -> [Card] -> GameStateState
+check_battle_winner :: [Card] -> [Card] -> [Card] -> [Card] -> [Card] -> [Card] -> StdGen -> GameStateState
+iswar :: [Card] -> [Card] -> Bool
+increment_move :: GameStateState
+iswar p1b p2b = ((last p1b) == (last p2b))
+check_battle_winner  p1b p2b p1d p2d p1ds p2ds newgen = do
 
+    game_state <- get
+    put $
+        if ((last p1b) > (last p2b)) then  --player 1 won the battle
+            GameState {
+                player1_deck = p1d,
+                player2_deck = p2d,
+                player1_discard =p1ds ++ p1b ++ p2b,
+                player2_discard= p2ds,
+                move_count= move_count game_state+1,
+                iom = iom game_state,
+                generator=newgen 
+            }
+        else {-if ((last p1b) < (last p2b)) then-} --player 2 won the battle
+            GameState {
+                player1_deck = p1d,
+                player2_deck = p2d,
+                player1_discard = p1ds ,
+                player2_discard= p2ds ++ p1b ++ p2b,
+                move_count= move_count game_state+1,
+                iom = iom game_state,
+                generator=newgen
+            }    
+    print_battlers p1b p2b
+    return GameNotOver
+
+-- Increments move counter
+increment_move = do
+    put GameState {
+        player1_deck = player1_deck game_state,
+        player2_deck = player2_deck game_state,
+        player1_discard = player1_discard game_state,
+        player2_discard = player2_discard game_state,
+        move_count= move_count game_state+1,
+        iom = iom game_state,
+        generator=generator game_state
+    } 
+    return GameNotOver
 
 
 allSimpleRanks = [Ace, Two , Three , Four , Five , Six , Seven , Eight , Nine , Ten , Jack , Queen , King]
@@ -86,130 +128,80 @@ showsuit s = case s of
     Black -> 'B'
     
 unshuffled_deck = 
-    -- do on a list runs a foreach loop every line so here I am abusing it
-    -- this is similar to 
-    -- foreach (simple_suit in allSimpleSuits):
-    --  foreach (simple_rank in allSimpleRanks):
-    --    list.append(Card(simplesuit, simplerank))
-    (do 
-    simple_suit <- allSimpleSuits
-    simple_rank <- allSimpleRanks
-    return (Card simple_rank simple_suit))
-    ++
-    (do
-    joker_suit <- [Red , Black]
-    return (Card Joker joker_suit))
+    -- use list comprehension to generate a deck. 
+    [Card simple_rank simple_suit | simple_suit <- allSimpleSuits, simple_rank <- allSimpleRanks] ++
+    [Card Joker joker_suit | joker_suit <- [Red, Black]]
 
 -- This is the code needed for a single fight of 2 cards, this is run recursively until a victor is decided or until the cards run out. 
 fight = do
     game_state <- get
-    let (p1d,p1ds,newgen') = if ((length $ player1_deck game_state)==0)
-        then 
+    let (p1d,p1ds,newgen') = if ((length $ player1_deck game_state)==0) --if the player ran out of cards
+        then --replace deck with shuffled discard pile
             let p1d' = player1_discard game_state in 
             let (newgen'', p1d'') = shuffle p1d' (generator game_state) in
             (p1d'', [], newgen'')
-        else (player1_deck game_state, player1_discard game_state,generator game_state) in
-        let (p2d,p2ds,newgen) = if ((length $ player2_deck game_state)==0)
+        else (player1_deck game_state, player1_discard game_state,generator game_state) in --otherwise just use the regular deck
+        let (p2d,p2ds,newgen) = if ((length $ player2_deck game_state)==0) 
             then 
                 let p2d' = player2_discard game_state in 
                 let (newgen'',p2d'') = shuffle p2d' newgen' in
                 (p2d'', [], newgen'')
             else  (player2_deck game_state, player2_discard game_state,newgen') in 
+            --pick the battlers 
             let p1b=[head p1d ] in
             let p2b=[head p2d ] in
-        if ((last p1b) > (last p2b)) then do
-            game_state <- get
-            put GameState {
-                player1_deck = tail p1d,
-                player2_deck = tail p2d,
-                player1_discard =p1ds ++ p1b ++ p2b,
-                player2_discard= p2ds,
-                move_count= move_count game_state+1,
-                iom = iom game_state,
-                generator=newgen 
-            }
-            print_battlers p1b p2b
-        else if ((last p1b) < (last p2b)) then do
-            game_state <- get
-            put GameState {
-                player1_deck = tail p1d,
-                player2_deck = tail p2d,
-                player1_discard = p1ds ,
-                player2_discard= p2ds ++ p1b ++ p2b,
-                move_count= move_count game_state+1,
-                iom = iom game_state,
-                generator=newgen
-            }
-            print_battlers p1b p2b
-
-        else {-((last p1b) == (last p2b))-}  do
-
-            game_state <- get
-            put GameState {
-                player1_deck = tail p1d,
-                player2_deck = tail p2d,
-                player1_discard = p1ds,
-                player2_discard = p2ds,
-                move_count= move_count game_state+1,
-                iom = iom game_state,
-                generator=newgen 
-            } 
-            print_battlers p1b p2b
-            game_state <- get
-            let war iom' p1d p2d p1b p2b =
-                    let n = 3 in
-                    let (newbattlers_p1', newdeck_p1) = splitAt n p1d in
-                    let (newbattlers_p2', newdeck_p2) = splitAt n p2d in 
-                    let newbattlers_p1 = p1b ++ newbattlers_p1' in
-                    let newbattlers_p2 = p2b ++ newbattlers_p2' in
-                    if ((last newbattlers_p1) > (last newbattlers_p2)) then do
-                        game_state <- get
-                        put GameState {
-                            player1_deck = newdeck_p1,
-                            player2_deck = newdeck_p2,
-                            player1_discard = player1_discard game_state ++ newbattlers_p1 ++ newbattlers_p2,
-                            player2_discard = player2_discard game_state,
-                            move_count= move_count game_state+1,
-                            iom = iom',
-                            generator=newgen
-                        } 
-                        print_battlers  newbattlers_p1 newbattlers_p2
-                        return GameNotOver
-                    else if ((last newbattlers_p1) < (last newbattlers_p2)) then do
-                        game_state <- get
-                        put GameState {
-                            player1_deck = newdeck_p1,
-                            player2_deck = newdeck_p2,
-                            player1_discard = player1_discard game_state,
-                            player2_discard = player2_discard game_state  ++ newbattlers_p2 ++ newbattlers_p1,
-                            move_count= move_count game_state+1,
-                            iom = iom',
-                            generator=newgen
-                        } 
-                        print_battlers  newbattlers_p1 newbattlers_p2
-                        return GameNotOver
-                    else 
-                        if (length newdeck_p1 == 0) || (length newdeck_p2 == 0) then do
-                            game_state <- get
-                            return $ GameOver (Endless, move_count game_state+1, iom')  
-                        else
-                            war (iom') newdeck_p1 newdeck_p2 newbattlers_p1 newbattlers_p2
+            if (iswar p1b p2b) then do
+                    game_state <- get
+                    put GameState {
+                        player1_deck = tail p1d,
+                        player2_deck = tail p2d,
+                        player1_discard = p1ds,
+                        player2_discard = p2ds,
+                        move_count= move_count game_state+1,
+                        iom = iom game_state,
+                        generator=newgen 
+                    } 
+                    print_battlers p1b p2b
+                    game_state <- get
+                    --define a function that processes a war. 
+                    let war iom' p1d p2d p1b p2b = 
+                            let n = 3 in
+                            let (newbattlers_p1', newdeck_p1) = splitAt n p1d in
+                            let (newbattlers_p2', newdeck_p2) = splitAt n p2d in 
+                            let newbattlers_p1 = p1b ++ newbattlers_p1' in
+                            let newbattlers_p2 = p2b ++ newbattlers_p2' in
+                            if (iswar newbattlers_p1 newbattlers_p2) then
+                                -- If a player runs out of main deck cards during a war the game is tied
+                                if (length newdeck_p1 == 0) || (length newdeck_p2 == 0) then do
+                                    game_state <- get
+                                    return $ GameOver (Endless, move_count game_state+1, iom')  
+                                else do
+                                    increment_move
+                                    print_battlers newbattlers_p1 newbattlers_p2
+                                    war (iom game_state) newdeck_p1 newdeck_p2 newbattlers_p1 newbattlers_p2
+                            else
+                                check_battle_winner newbattlers_p1 newbattlers_p2 newdeck_p1 newdeck_p2 (player1_discard game_state) (player2_discard game_state) newgen
+                        -- run it 
                         in war (iom game_state) (tail p1d) (tail p2d) p1b p2b 
+
+            else
+                check_battle_winner p1b p2b (tail p1d) (tail p2d) p1ds p2ds newgen 
+
     
 
---
+-- main game loop
 game = 
     do
         game_state <- get
-        if move_count game_state >= 50000 then
+        if move_count game_state >= 50000 then -- make sure the game isn't going on for too long
             return $ GameOver (Timeout,move_count game_state, iom game_state)
         else if ((((length (player1_deck game_state))/=0) || ((length (player1_discard game_state))/=0)) &&
             (((length (player2_deck game_state))/=0) || ((length (player2_discard game_state))/=0))) then do
             isover <- fight  
             case isover of
-                GameNotOver -> gamerec
+                GameNotOver -> game
                 GameOver x -> return $ GameOver x
-        else do
+        else do --one of the players won
             let iom' = iom game_state in
                 if ((length (player2_deck game_state))==0) then
                     return $ GameOver (Player1_Win,move_count game_state,iom')
@@ -217,7 +209,7 @@ game =
                     return $ GameOver (Player2_Win,move_count game_state,iom')
                 else undefined 
     
-
+--initialization routine for a state
 initialize_game_state generator' = 
     let deck_size = length unshuffled_deck in
     let (newgen,deck) = shuffle unshuffled_deck generator' in
@@ -233,23 +225,8 @@ initialize_game_state generator' =
         generator=newgen
 
     }
-main = do 
-    generator' <- getStdGen
-    let result = evalState game (initialize_game_state generator') in
-        case result of 
-            GameNotOver -> die "Game returned as Not Over\n"
-            GameOver (winner,move_count', iom') -> do
-                iom'
-                case winner of 
-                    Player1_Win -> printf "\n\n\nPlayer 1 Wins after %d moves\n" move_count'
-                    Player2_Win -> printf "\n\n\nPlayer 2 Wins after %d moves\n" move_count'
-                    Timeout -> putStrLn "Timeout"
-                    Endless -> putStrLn "Endless"
-                
 
-            
-
-
+-- updates the IO Monad 
 print_battlers player1_battlers player2_battlers = do
 
     game_state <- get 
@@ -267,3 +244,20 @@ print_battlers player1_battlers player2_battlers = do
                 iom = iom game_state >> iom',
                 generator = generator game_state
             } >> return GameNotOver
+main = do 
+    generator' <- getStdGen
+    let result = evalState game (initialize_game_state generator') in
+        case result of 
+            GameNotOver -> die "Game returned as Not Over\n"
+            GameOver (winner,move_count', iom') -> do
+                iom'
+                case winner of 
+                    Player1_Win -> printf "\n\n\nPlayer 1 Wins after %d moves\n" move_count'
+                    Player2_Win -> printf "\n\n\nPlayer 2 Wins after %d moves\n" move_count'
+                    Timeout -> putStrLn "Timeout"
+                    Endless -> putStrLn "Endless"
+                
+
+            
+
+
